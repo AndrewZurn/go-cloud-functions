@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,6 +37,11 @@ func sendText() (string, error) {
 		projectID = "personal-223023"
 	}
 
+	completedTextBaseURL := os.Getenv("COMPLETED_TEXT_URL")
+	if completedTextBaseURL == "" {
+		completedTextBaseURL = "https://us-central1-personal-223023.cloudfunctions.net/completed-exercise"
+	}
+
 	ctx := context.Background()
 	client, err := datastore.NewClient(ctx, projectID)
 	defer client.Close()
@@ -59,22 +65,37 @@ func sendText() (string, error) {
 		return "Did not send text, exercise reminder is currently disabled.", nil
 	}
 
-	exercises := [4]string{
-		"Max push ups or 2 sets of 60% of max.",
-		"Ab work out of choice for 2-3 minutes.",
-		"15 Body weight squats, 16 Lunges, 15 calf raises. Twice for extra credit.",
-		"Stretch for 5 minutes.",
+	type Exercise struct {
+		Text string
+		Type string
+	}
+	exercises := [4]Exercise{
+		Exercise{"Max push ups or 2 sets of 60% of max.", "Upperbody"},
+		Exercise{"Ab work out of choice for 2-3 minutes.", "Abs"},
+		Exercise{"15 Body weight squats, 16 Lunges, 15 calf raises. Twice for extra credit.", "Lowerbody"},
+		Exercise{"Stretch for 5 minutes.", "Misc"},
 	}
 
 	rand.Seed(time.Now().Unix())
 	if rand.Intn(2) == 1 {
 		exercise := exercises[rand.Intn(len(exercises))]
-		fmt.Println("Sending text for exercise " + exercise)
+
+		var completedExerciseTextBuilder strings.Builder
+		completedExerciseTextBuilder.WriteString(exercise.Text)
+		completedExerciseTextBuilder.WriteString("\nCompleted? Hit: ")
+		completedExerciseTextBuilder.WriteString(completedTextBaseURL)
+		completedExerciseTextBuilder.WriteString("?type=")
+		completedExerciseTextBuilder.WriteString(exercise.Type)
+		completedExerciseTextBuilder.WriteString("&id=")
+		completedExerciseTextBuilder.WriteString(strconv.Itoa(rand.Int()))
+		completedExerciseText := completedExerciseTextBuilder.String()
+
+		fmt.Println("Sending text for exercise: " + completedExerciseText)
 
 		msgData := url.Values{}
 		msgData.Set("To", "+19526490887")
 		msgData.Set("From", "+16123244132")
-		msgData.Set("Body", exercise)
+		msgData.Set("Body", completedExerciseText)
 		msgDataReader := *strings.NewReader(msgData.Encode())
 
 		client := &http.Client{}
